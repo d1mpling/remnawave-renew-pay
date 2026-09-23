@@ -1,99 +1,161 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="https://github.com/d1mpling/remnawave-renew-pay.git"
+INSTALL_DIR="/opt/remnawave-renew-pay"
 
 echo "=========================================="
 echo "     Remnawave Renew Pay Installer"
 echo "=========================================="
 echo
 
-command -v docker >/dev/null 2>&1 || {
-  echo "ERROR: Docker не найден."
-  exit 1
-}
-
-docker compose version >/dev/null 2>&1 || {
-  echo "ERROR: Docker Compose не найден."
-  exit 1
-}
-
-if [ ! -f "$APP_DIR/.env" ]; then
-  cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: Docker не найден."
+    exit 1
 fi
 
+if ! docker compose version >/dev/null 2>&1; then
+    echo "ERROR: Docker Compose не найден."
+    exit 1
+fi
+
+echo "Скачиваем файлы проекта..."
+
+rm -rf "$INSTALL_DIR"
+
+if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "$REPO" /tmp/remnawave-renew-pay
+    mkdir -p "$INSTALL_DIR"
+    cp -r /tmp/remnawave-renew-pay/Files/. "$INSTALL_DIR/"
+    rm -rf /tmp/remnawave-renew-pay
+else
+    mkdir -p /tmp/remnawave-renew-pay
+    curl -fsSL "https://github.com/d1mpling/remnawave-renew-pay/archive/refs/heads/main.tar.gz" \
+        -o /tmp/remnawave-renew-pay.tar.gz
+
+    tar -xzf /tmp/remnawave-renew-pay.tar.gz \
+        -C /tmp/remnawave-renew-pay \
+        --strip-components=2 \
+        "remnawave-renew-pay-main/Files"
+
+    mkdir -p "$INSTALL_DIR"
+    cp -r /tmp/remnawave-renew-pay/. "$INSTALL_DIR/"
+    rm -rf /tmp/remnawave-renew-pay /tmp/remnawave-renew-pay.tar.gz
+fi
+
+cd "$INSTALL_DIR"
+
+if [ ! -f ".env" ]; then
+    cp ".env.example" ".env"
+fi
+
+echo
 echo "Выберите платёжную систему:"
-echo "  1) ЮKassa"
-echo "  2) Platega"
-echo "  3) ЮKassa + Platega"
+echo
+echo "  1) 💳 ЮKassa"
+echo "  2) 💰 Platega"
+echo "  3) 🔀 ЮKassa + Platega"
+echo
+
 read -r -p "Выбор [1-3]: " provider
 
 case "$provider" in
-  1) providers="yookassa" ;;
-  2) providers="platega" ;;
-  3) providers="yookassa,platega" ;;
-  *) echo "Неверный выбор"; exit 1 ;;
+    1)
+        providers="yookassa"
+        ;;
+    2)
+        providers="platega"
+        ;;
+    3)
+        providers="yookassa,platega"
+        ;;
+    *)
+        echo "Неверный выбор."
+        exit 1
+        ;;
 esac
 
 set_env() {
-  key="$1"
-  value="$2"
-  if grep -q "^${key}=" "$APP_DIR/.env"; then
-    sed -i "s#^${key}=.*#${key}=${value}#" "$APP_DIR/.env"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$APP_DIR/.env"
-  fi
+    local key="$1"
+    local value="$2"
+
+    if grep -q "^${key}=" .env; then
+        sed -i "s#^${key}=.*#${key}=${value}#" .env
+    else
+        printf '%s=%s\n' "$key" "$value" >> .env
+    fi
 }
 
 set_env PAYMENT_PROVIDERS "$providers"
 
-read -r -p "REMNAWAVE_URL [http://remnawave:3000]: " rw
+echo
+read -r -p "URL Remnawave [http://remnawave:3000]: " rw
 rw="${rw:-http://remnawave:3000}"
 set_env REMNAWAVE_URL "$rw"
 
-read -r -s -p "REMNAWAVE_TOKEN: " token
+echo
+read -r -s -p "Remnawave API Token: " token
 echo
 set_env REMNAWAVE_TOKEN "$token"
 
-read -r -p "PUBLIC_URL (например https://pay.example.com): " public_url
+echo
+read -r -p "Публичный URL сервиса (например https://pay.example.com): " public_url
 set_env PUBLIC_URL "$public_url"
 
-if [[ "$providers" == *yookassa* ]]; then
-  read -r -p "ЮKassa Shop ID: " shop
-  read -r -s -p "ЮKassa Secret Key: " secret
-  echo
-  set_env YOOKASSA_SHOP_ID "$shop"
-  set_env YOOKASSA_SECRET_KEY "$secret"
+if [[ "$providers" == *"yookassa"* ]]; then
+    echo
+    echo "========== ЮKassa =========="
+
+    read -r -p "Shop ID: " shop
+    read -r -s -p "Secret Key: " secret
+    echo
+
+    set_env YOOKASSA_SHOP_ID "$shop"
+    set_env YOOKASSA_SECRET_KEY "$secret"
 fi
 
-if [[ "$providers" == *platega* ]]; then
-  read -r -p "Platega Merchant ID: " merchant
-  read -r -s -p "Platega Secret: " psecret
-  echo
-  set_env PLATEGA_MERCHANT_ID "$merchant"
-  set_env PLATEGA_SECRET "$psecret"
+if [[ "$providers" == *"platega"* ]]; then
+    echo
+    echo "========== Platega =========="
+
+    read -r -p "Merchant ID: " merchant
+    read -r -s -p "Secret: " psecret
+    echo
+
+    set_env PLATEGA_MERCHANT_ID "$merchant"
+    set_env PLATEGA_SECRET "$psecret"
 fi
 
-mkdir -p "$APP_DIR/data"
-touch "$APP_DIR/data/processed.json"
+mkdir -p data
+touch data/processed.json
 
 echo
-echo "Собираем контейнер..."
-cd "$APP_DIR"
+echo "=========================================="
+echo "Собираем и запускаем контейнер..."
+echo "=========================================="
+
 docker compose up -d --build
 
 echo
-echo "Проверяем..."
-sleep 3
+echo "=========================================="
+echo "       Установка завершена!"
+echo "=========================================="
+echo
+
 docker compose ps
+
 echo
-echo "=========================================="
-echo "Установка завершена"
-echo "=========================================="
+echo "Health:"
+echo "${public_url}/health"
+
 echo
-echo "Health: ${public_url:-http://SERVER:3100}/health"
-echo "ЮKassa webhook: ${public_url:-http://SERVER:3100}/webhook/yookassa"
-echo "Platega webhook: ${public_url:-http://SERVER:3100}/webhook/platega"
+echo "ЮKassa webhook:"
+echo "${public_url}/webhook/yookassa"
+
+echo
+echo "Platega webhook:"
+echo "${public_url}/webhook/platega"
+
 echo
 echo "Логи:"
-echo "  docker compose logs -f renew-pay"
+echo "cd $INSTALL_DIR && docker compose logs -f renew-pay"
