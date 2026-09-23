@@ -3,7 +3,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3100);
-const RW_URL = (process.env.REMN​​AWAVE_URL || process.env.REMNAWAVE_URL || "").replace(/\/$/, "");
+const RW_URL = (process.env.REMNAWAVE_URL || "").replace(/\/$/, "");
 const RW_TOKEN = process.env.REMNAWAVE_TOKEN || "";
 const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 
