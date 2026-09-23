@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO="https://github.com/d1mpling/remnawave-renew-pay.git"
 INSTALL_DIR="/opt/remnawave-renew-pay"
+PAY_PORT="8443"
 
 echo "=========================================="
 echo "     Remnawave Renew Pay Installer"
@@ -19,6 +20,16 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
+echo "Проверяем порт ${PAY_PORT}..."
+
+if ss -ltn 2>/dev/null | grep -q ":${PAY_PORT} "; then
+    echo
+    echo "ERROR: порт ${PAY_PORT} уже занят."
+    echo "Освободите его и запустите установщик снова."
+    exit 1
+fi
+
+echo
 echo "Скачиваем файлы проекта..."
 
 rm -rf "$INSTALL_DIR"
@@ -99,7 +110,23 @@ set_env REMNAWAVE_TOKEN "$token"
 
 echo
 read -r -p "Публичный URL сервиса (например https://pay.example.com): " public_url
+
+if [ -z "$public_url" ]; then
+    echo "ERROR: публичный URL не может быть пустым."
+    exit 1
+fi
+
+# Для этого сервиса используем отдельный внешний порт,
+# потому что 443 на типичной установке Remnawave уже занят rw-core.
+if [[ "$public_url" != *":${PAY_PORT}"* ]]; then
+    public_url="${public_url%/}:${PAY_PORT}"
+fi
+
 set_env PUBLIC_URL "$public_url"
+
+echo
+echo "Публичный URL:"
+echo "$public_url"
 
 if [[ "$providers" == *"yookassa"* ]]; then
     echo
@@ -144,17 +171,27 @@ echo
 docker compose ps
 
 echo
-echo "Health:"
-echo "${public_url}/health"
-
+echo "=========================================="
+echo "Проверка Health"
+echo "=========================================="
 echo
+echo "${public_url}/health"
+echo
+
 echo "ЮKassa webhook:"
 echo "${public_url}/webhook/yookassa"
-
 echo
+
 echo "Platega webhook:"
 echo "${public_url}/webhook/platega"
-
 echo
+
 echo "Логи:"
 echo "cd $INSTALL_DIR && docker compose logs -f renew-pay"
+echo
+
+echo "=========================================="
+echo "ВАЖНО:"
+echo "Сервис использует внешний порт ${PAY_PORT}."
+echo "443 Remnawave не затрагивается."
+echo "=========================================="
