@@ -22,28 +22,27 @@ fi
 echo "Скачиваем файлы проекта..."
 
 rm -rf "$INSTALL_DIR"
+rm -rf /tmp/remnawave-renew-pay
 
-if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO" /tmp/remnawave-renew-pay
-    mkdir -p "$INSTALL_DIR"
-    cp -r /tmp/remnawave-renew-pay/Files/. "$INSTALL_DIR/"
-    rm -rf /tmp/remnawave-renew-pay
-else
-    mkdir -p /tmp/remnawave-renew-pay
-    curl -fsSL "https://github.com/d1mpling/remnawave-renew-pay/archive/refs/heads/main.tar.gz" \
-        -o /tmp/remnawave-renew-pay.tar.gz
-
-    tar -xzf /tmp/remnawave-renew-pay.tar.gz \
-        -C /tmp/remnawave-renew-pay \
-        --strip-components=2 \
-        "remnawave-renew-pay-main/Files"
-
-    mkdir -p "$INSTALL_DIR"
-    cp -r /tmp/remnawave-renew-pay/. "$INSTALL_DIR/"
-    rm -rf /tmp/remnawave-renew-pay /tmp/remnawave-renew-pay.tar.gz
+if ! command -v git >/dev/null 2>&1; then
+    echo "Устанавливаем git..."
+    apt-get update
+    apt-get install -y git
 fi
 
+git clone --depth 1 "$REPO" /tmp/remnawave-renew-pay
+
+mkdir -p "$INSTALL_DIR"
+cp -r /tmp/remnawave-renew-pay/Files/. "$INSTALL_DIR/"
+
+rm -rf /tmp/remnawave-renew-pay
+
 cd "$INSTALL_DIR"
+
+if [ ! -f ".env.example" ]; then
+    echo "ERROR: .env.example не найден в Files/"
+    exit 1
+fi
 
 if [ ! -f ".env" ]; then
     cp ".env.example" ".env"
@@ -52,9 +51,9 @@ fi
 echo
 echo "Выберите платёжную систему:"
 echo
-echo "  1) 💳 ЮKassa"
-echo "  2) 💰 Platega"
-echo "  3) 🔀 ЮKassa + Platega"
+echo "  1) ЮKassa"
+echo "  2) Platega"
+echo "  3) ЮKassa + Platega"
 echo
 
 read -r -p "Выбор [1-3]: " provider
