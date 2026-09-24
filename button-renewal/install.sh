@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # remnawave-renew: установка кнопки продления на страницу подписки Remnawave.
 #
-#   bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USER/remnawave-renew/main/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/d1mpling/remnawave-renew-pay/main/button-renewal/install.sh)
 #
 # Меню: 1) всё на домене подписки, 2) отдельный домен оплаты, 3) обновить код, 4) удалить.
 # Без меню: install.sh path | domain | update | uninstall
 set -Eeuo pipefail
 
-REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/YOUR_USER/remnawave-renew/main}"
+REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/d1mpling/remnawave-renew-pay/main/button-renewal}"
 DIR="${RENEW_DIR:-/opt/renew-pay}"
 NODE_IMAGE="node:22-alpine"
 SELF="${BASH_SOURCE[0]:-$0}"
@@ -50,6 +50,11 @@ need_docker() {
 [ "$(id -u)" = 0 ] || die "Запустите от root (sudo -i)."
 
 # ---------- файлы приложения ----------
+check_repo() { # падаем до вопросов, а не после ввода ключей
+  [ -f "$SRC_DIR/app/server.js" ] && return 0
+  [[ "$REPO_RAW" != *YOUR_USER* ]] || die "В install.sh не заменён YOUR_USER в REPO_RAW. Задайте: REPO_RAW=https://raw.githubusercontent.com/<ник>/<репо>/main/<папка> bash <(curl ...)"
+  curl -fsI -m 15 "$REPO_RAW/app/server.js" >/dev/null 2>&1 || die "Не найден $REPO_RAW/app/server.js (репозиторий публичный? ветка main? верная папка?)"
+}
 fetch_app() {
   mkdir -p "$DIR/data"
   local f
@@ -324,6 +329,7 @@ start_service() {
 do_install() {
   PAY_MODE="$1"
   need_docker
+  check_repo
   step "Какую платёжку использовать?"
   say "  1) YooKassa (ЮKassa): карты, СБП, чеки 54-ФЗ"
   say "  2) Platega: СБП, карты, крипта"
@@ -402,6 +408,7 @@ do_install() {
 
 do_update() {
   need_docker
+  check_repo
   [ -f "$DIR/.env" ] || die "$DIR/.env не найден, сначала выполните установку."
   fetch_app
   (cd "$DIR" && $COMPOSE up -d --force-recreate >/dev/null)
