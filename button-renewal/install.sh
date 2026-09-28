@@ -14,7 +14,7 @@ SELF="${BASH_SOURCE[0]:-$0}"
 SRC_DIR="$(cd "$(dirname "$SELF")" 2>/dev/null && pwd || true)"
 
 # ---------- вывод и ввод ----------
-B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; N=$'\e[0m'
+B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; N=$'\e[0m'
 say()  { printf '%s\n' "$*" >&2; }
 step() { printf '\n%s==> %s%s\n' "$B" "$*" "$N" >&2; }
 ok()   { printf '%s✓%s %s\n' "$G" "$N" "$*" >&2; }
@@ -23,7 +23,7 @@ die()  { printf '%s✗ %s%s\n' "$R" "$*" "$N" >&2; exit 1; }
 trap 'die "Ошибка на строке $LINENO. Изменения nginx (если были) откатываются автоматически."' ERR
 
 [ -r /dev/tty ] || die "Нужен интерактивный терминал (запускайте через SSH, не из cron)."
-ask() { # ask "вопрос" "значение по умолчанию"
+ask() {
   local v=""
   if [ -n "${2-}" ]; then read -r -p "$1 [$2]: " v </dev/tty || true
   else read -r -p "$1: " v </dev/tty || true; fi
@@ -35,10 +35,36 @@ ask_secret() {
   while [ -z "$v" ]; do read -r -s -p "$1: " v </dev/tty || true; printf '\n' >&2; done
   printf '%s' "$v"
 }
-ask_yn() { # ask_yn "вопрос" y|n
+ask_yn() {
   local d="${2:-y}" v hint="Y/n"; [ "$d" = n ] && hint="y/N"
   read -r -p "$1 [$hint]: " v </dev/tty || true
   v="${v:-$d}"; [[ "$v" =~ ^[YyДд] ]]
+}
+
+# ---------- баннер ----------
+banner() {
+  clear
+  printf '%s\n' "${B}${C}╔══════════════════════════════════════════════════════════════════╗${N}" >&2
+  printf '%s\n' "${B}${C}║                                                                    ║${N}" >&2
+  printf '%s\n' "${B}${C}║${N}   ${B}REMNAWAVE RENEW-PAY${N}${B}${C} — кнопка «Продлить» для страницы подписки  ║${N}" >&2
+  printf '%s\n' "${B}${C}║${N}   github.com/d1mpling/remnawave-renew-pay                          ${B}${C}║${N}" >&2
+  printf '%s\n' "${B}${C}║                                                                    ║${N}" >&2
+  printf '%s\n' "${B}${C}╚══════════════════════════════════════════════════════════════════╝${N}" >&2
+  say ""
+  step "Проверка окружения"
+  [ "$(id -u)" = 0 ] && ok "Права root подтверждены" || warn "Скрипт запущен не от root"
+  if command -v docker >/dev/null 2>&1; then
+    ok "Docker CLI найден"
+    if docker info >/dev/null 2>&1; then ok "Docker daemon работает"; else warn "Docker daemon недоступен"; fi
+  else
+    warn "Docker не найден"
+  fi
+  if docker inspect remnawave >/dev/null 2>&1; then
+    ok "Панель Remnawave найдена (контейнер remnawave)"
+  else
+    warn "Контейнер remnawave не найден — убедитесь, что панель установлена"
+  fi
+  [ -f "$DIR/.env" ] && ok "Найдена существующая установка в $DIR" || true
 }
 
 # ---------- проверки ----------
@@ -50,7 +76,7 @@ need_docker() {
 [ "$(id -u)" = 0 ] || die "Запустите от root (sudo -i)."
 
 # ---------- файлы приложения ----------
-check_repo() { # падаем до вопросов, а не после ввода ключей
+check_repo() {
   [ -f "$SRC_DIR/app/server.js" ] && return 0
   [[ "$REPO_RAW" != *YOUR_USER* ]] || die "В install.sh не заменён YOUR_USER в REPO_RAW. Задайте: REPO_RAW=https://raw.githubusercontent.com/<ник>/<репо>/main/<папка> bash <(curl ...)"
   curl -fsI -m 15 "$REPO_RAW/app/server.js" >/dev/null 2>&1 || die "Не найден $REPO_RAW/app/server.js (репозиторий публичный? ветка main? верная папка?)"
@@ -86,7 +112,7 @@ strip_markers() {
       -e '/# renew-pay-loc begin/,/# renew-pay-loc end/d' "$1"
 }
 
-nginx_apply() { # $1 = новый конфиг; пишем через cat >, чтобы bind-mount не потерял inode
+nginx_apply() {
   local bak="$CONF.bak.$(date +%Y%m%d-%H%M%S)"
   cp -p "$CONF" "$bak"
   cat "$1" > "$CONF"
@@ -219,7 +245,7 @@ fetch(process.env.U + "/api/internal-squads", { headers: { Authorization: "Beare
   .catch(e => { console.error(e.message); process.exit(1); })' 2>/dev/null
 }
 
-pick_squads() { # $1 = название тарифа; печатает JSON-список "a","b"
+pick_squads() {
   local line n out="" sel
   say "Внутренние сквады для тарифа «$1» (номера через пробел, пусто = не менять сквады пользователя):"
   sel="$(ask "Номера" "")"
@@ -427,10 +453,10 @@ do_uninstall() {
   if ask_yn "Удалить каталог $DIR вместе с ключами и списком платежей?" n; then rm -rf "$DIR"; ok "Удалено"; fi
 }
 
+banner
+
 MODE="${1:-}"
 if [ -z "$MODE" ] || [ "$MODE" = install ]; then
-  say ""
-  say "${B}remnawave-renew${N}: кнопка «Продлить» для страницы подписки Remnawave"
   say ""
   say "Выберите режим:"
   say "  ${B}1${N}) Всё на домене подписки"
