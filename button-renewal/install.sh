@@ -50,21 +50,6 @@ banner() {
   printf '%s\n' "${B}${C}║${N}   github.com/d1mpling/remnawave-renew-pay                          ${B}${C}║${N}" >&2
   printf '%s\n' "${B}${C}║                                                                    ║${N}" >&2
   printf '%s\n' "${B}${C}╚══════════════════════════════════════════════════════════════════╝${N}" >&2
-  say ""
-  step "Проверка окружения"
-  [ "$(id -u)" = 0 ] && ok "Права root подтверждены" || warn "Скрипт запущен не от root"
-  if command -v docker >/dev/null 2>&1; then
-    ok "Docker CLI найден"
-    if docker info >/dev/null 2>&1; then ok "Docker daemon работает"; else warn "Docker daemon недоступен"; fi
-  else
-    warn "Docker не найден"
-  fi
-  if docker inspect remnawave >/dev/null 2>&1; then
-    ok "Панель Remnawave найдена (контейнер remnawave)"
-  else
-    warn "Контейнер remnawave не найден — убедитесь, что панель установлена"
-  fi
-  [ -f "$DIR/.env" ] && ok "Найдена существующая установка в $DIR" || true
 }
 
 # ---------- проверки ----------
