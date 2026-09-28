@@ -466,11 +466,14 @@ if [ -z "$MODE" ] || [ "$MODE" = install ]; then
   say "     Например pay.ваш-домен:8443. Нужны DNS-запись, открытый порт и сертификат на этот домен."
   say "  ${B}3${N}) Обновить код (если уже установлено)"
   say "  ${B}4${N}) Удалить"
+  say "  ${B}0${N}) Выход"
   case "$(ask "Ваш выбор" "1")" in
     2) MODE=domain ;;
     3) MODE=update ;;
     4) MODE=uninstall ;;
-    *) MODE=path ;;
+    0) say "Выход."; exit 0 ;;
+    1) MODE=path ;;
+    *) die "Неверный выбор." ;;
   esac
 fi
 case "$MODE" in
